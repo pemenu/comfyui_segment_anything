@@ -79,15 +79,19 @@ def list_sam_model():
 
 
 def load_sam_model(model_name):
+    device = comfy.model_management.get_torch_device()
     sam_checkpoint_path = get_local_filepath(
         sam_model_list[model_name]["model_url"], sam_model_dir_name)
     model_file_name = os.path.basename(sam_checkpoint_path)
     model_type = model_file_name.split('.')[0]
     if 'hq' not in model_type and 'mobile' not in model_type:
         model_type = '_'.join(model_type.split('_')[:-1])
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint_path)
-    sam_device = comfy.model_management.get_torch_device()
-    sam.to(device=sam_device)
+    
+    # Load the model with explicit device mapping
+    checkpoint = torch.load(sam_checkpoint_path, map_location=device)
+    sam = sam_model_registry[model_type]()
+    sam.load_state_dict(checkpoint)
+    sam.to(device=device)
     sam.eval()
     sam.model_name = model_file_name
     return sam
@@ -126,15 +130,17 @@ def load_groundingdino_model(model_name):
         dino_model_args.text_encoder_type = get_bert_base_uncased_model_path()
     
     dino = local_groundingdino_build_model(dino_model_args)
+    device = comfy.model_management.get_torch_device()
+    # Load checkpoint with appropriate device mapping
     checkpoint = torch.load(
         get_local_filepath(
             groundingdino_model_list[model_name]["model_url"],
             groundingdino_model_dir_name,
         ),
+        map_location=device
     )
     dino.load_state_dict(local_groundingdino_clean_state_dict(
         checkpoint['model']), strict=False)
-    device = comfy.model_management.get_torch_device()
     dino.to(device=device)
     dino.eval()
     return dino
